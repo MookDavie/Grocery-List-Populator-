@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for
 import requests
 from bs4 import BeautifulSoup
 
-app = Flask(app)
+app = Flask(__name__)
 
 def extract_ingredients(url):
     """Fetches the recipe page and extracts ingredients, prioritizing JSON-LD."""
@@ -103,4 +103,5 @@ def result():
 if __name__ == '__main__':
     # Use Gunicorn in production (deployment), but this runs for local testing
     app.run(debug=True)
+
 
