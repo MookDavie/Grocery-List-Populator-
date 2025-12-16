@@ -1,9 +1,11 @@
 import json
 import urllib.parse
+import os # Added for optional deployment port configuration
 from flask import Flask, render_template, request, redirect, url_for
 import requests
 from bs4 import BeautifulSoup
 
+# Correct Flask initialization
 app = Flask(__name__)
 
 def extract_ingredients(url):
@@ -17,42 +19,75 @@ def extract_ingredients(url):
         response.raise_for_status() # Raise exception for bad status codes
         soup = BeautifulSoup(response.content, 'html.parser')
 
-        # 2. Look for JSON-LD structured data (Best method)
+        # 2. Robust JSON-LD Structured Data Check (PRIORITY 1)
         scripts = soup.find_all('script', {'type': 'application/ld+json'})
         
         for script in scripts:
             try:
                 data = json.loads(script.string)
                 
-                # Handle single object or list of objects in JSON-LD
-                if not isinstance(data, list):
-                    data = [data]
-                    
-                for item in data:
-                    # Look for the main Recipe type
+                # Handle single object, or list of objects, or nested @graph structure
+                data_list = data if isinstance(data, list) else [data]
+                
+                for item in data_list:
+                    # Look for Recipe type directly
                     if item.get('@type') == 'Recipe':
                         ingredients = item.get('recipeIngredient', [])
                         if ingredients:
                             return "\n".join(ingredients)
+                    
+                    # Look inside a nested @graph structure
+                    if isinstance(item, dict) and '@graph' in item:
+                        for graph_item in item['@graph']:
+                            if graph_item.get('@type') == 'Recipe':
+                                ingredients = graph_item.get('recipeIngredient', [])
+                                if ingredients:
+                                    return "\n".join(ingredients)
 
             except json.JSONDecodeError:
                 # Silently skip scripts that are not valid JSON
                 continue
             
-        # 3. Fallback: Search for common HTML tags (Less reliable)
-        # We'll just look for common list items as a simple fallback
-        # This will likely require manual tweaking for specific sites.
-        ingredient_list = []
-        for tag in soup.find_all(['li', 'span'], class_=lambda c: c and 'ingredient' in c.lower()):
-            text = tag.get_text(strip=True)
-            if text and len(text.split()) > 2 and 'cup' in text.lower() or 'tsp' in text.lower() or 'tbsp' in text.lower():
-                 ingredient_list.append(text)
+        # 3. Targeted HTML Fallback (PRIORITY 2)
         
-        if ingredient_list:
-             # De-duplicate and return
-             return "\n".join(sorted(list(set(ingredient_list))))
+        # List of common CSS class names for ingredient containers/list items
+        common_ingredient_classes = [
+            'wprm-recipe-ingredient',      # WP Recipe Maker plugin
+            'ingredient',
+            'ingredients',
+            'recipe-ingredients',
+            'list-ingredients',
+            'tasty-recipes-ingredients',   # Common food blog plugin
+            'pantry-list',
+            'recipeIngredient',            # Common itemprop tag
+            'o-Ingredients__a-Ingredient'  # Example specific site class (e.g., Food Network)
+        ]
+        
+        ingredient_list = []
+        
+        for class_name in common_ingredient_classes:
+            # Find list items or spans/divs with the ingredient class
+            found_tags = soup.find_all(
+                ['li', 'span', 'div'], 
+                class_=lambda c: c and class_name.lower() in c.lower()
+            )
+            
+            for tag in found_tags:
+                text = tag.get_text(strip=True)
+                
+                # Simple validation: must contain some text and likely a measurement unit
+                if text and len(text.split()) > 1 and any(unit in text.lower() for unit in ['cup', 'tsp', 'tbsp', 'oz', 'gram', 'ml']):
+                    # Filter out instructional text often included in ingredient containers
+                    if 'cook time' not in text.lower() and 'directions' not in text.lower():
+                        ingredient_list.append(text)
 
-        return "Error: Could not find ingredients using standard methods."
+            # If we find a good list, use it and stop searching other classes
+            if ingredient_list:
+                # Use set to de-duplicate, then sort and join
+                return "\n".join(sorted(list(set(ingredient_list))))
+                
+        # 4. Final Fail State
+        return "Error: Could not find ingredients using structured data or common HTML methods."
 
     except requests.exceptions.RequestException as e:
         return f"Error connecting to URL: {e}"
@@ -73,9 +108,8 @@ def index():
             return render_template('index.html', error=raw_list)
 
         # 2. Format the list for Notes and URL scheme
-        # Replace newlines with URL-encoded newlines (%0A)
-        # Use '-' for better bullet points in Apple Notes (optional)
-        formatted_list = raw_list.replace('\n', ' - ') 
+        # Replace newlines with a bullet and space for better readability in Notes
+        formatted_list = "• " + raw_list.replace('\n', '\n• ') 
         
         # 3. URL-encode the final text string for the Shortcuts link
         encoded_list = urllib.parse.quote(formatted_list)
@@ -102,6 +136,6 @@ def result():
 
 if __name__ == '__main__':
     # Use Gunicorn in production (deployment), but this runs for local testing
-    app.run(debug=True)
-
-
+    # Uses 0.0.0.0 host for compatibility in containerized environments (like Docker/Render)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
