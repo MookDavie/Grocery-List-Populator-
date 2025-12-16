@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grocery List Generated</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Your Grocery List is Ready!</h1>
+
+        <div class="list-container">
+            <h3>🛒 List Preview:</h3>
+            <p class="list-preview">{{ display_list | safe }}</p>
+        </div>
+
+        <p class="instruction">
+            For automatic import, click the button below. **NOTE: You must have the 'Add to Notes' Apple Shortcut installed on your device.**
+        </p>
+
+        <a href="{{ shortcut_link }}" class="button-link primary-button">
+            Open in Apple Notes App
+        </a>
+        
+        <p class="manual-copy">
+            If the button doesn't work, manually copy the raw list below:
+        </p>
+        <textarea id="rawList" rows="5" readonly>{{ raw_list }}</textarea>
+        <button onclick="copyToClipboard()">Copy List</button>
+        
+        <a href="{{ url_for('index') }}" class="button-link secondary-button">Start Over</a>
+    </div>
+
+    <script>
+        function copyToClipboard() {
+            var copyText = document.getElementById("rawList");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999); // For mobile devices
+            document.execCommand("copy");
+            alert("List copied to clipboard!");
+        }
+    </script>
+</body>
+</html>
