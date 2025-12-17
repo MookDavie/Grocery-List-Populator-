@@ -18,6 +18,13 @@ def extract_ingredients(url):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status() # Raise exception for bad status codes
         soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # --- EXTRACT TITLE ---
+        # Look for the recipe title in common header tags
+        title = "My Recipe"  # Default fallback
+        title_tag = soup.find('h1') or soup.find('title')
+        if title_tag:
+            title = title_tag.get_text(strip=True)
 
         # 2. Robust JSON-LD Structured Data Check (PRIORITY 1)
         scripts = soup.find_all('script', {'type': 'application/ld+json'})
@@ -139,3 +146,4 @@ if __name__ == '__main__':
     # Uses 0.0.0.0 host for compatibility in containerized environments (like Docker/Render)
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
