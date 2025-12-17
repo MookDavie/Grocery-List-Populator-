@@ -83,7 +83,8 @@
 <body>
 
 <div class="container">
-    <h1>Ingredients Found</h1>
+    <h1 style="color: var(--primary);">{{ recipe_title }}</h1>
+    <p style="font-weight: bold; margin-bottom: 5px;">Ingredients:</p>
 
     <div class="ingredient-box" id="ingredientList">
         {{ display_list|safe }}
@@ -130,4 +131,5 @@
 
 </body>
 </html>
+
 
